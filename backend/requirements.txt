@@ -1,0 +1,11 @@
+
+# Web framework and development server
+fastapi
+uvicorn[standard]
+
+# PostgreSQL database connection and ORM
+sqlalchemy
+psycopg[binary]
+
+# Load application settings from environment variables
+pydantic-settings
