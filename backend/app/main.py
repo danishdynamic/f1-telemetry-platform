@@ -8,7 +8,8 @@ from app.database import get_db
 
 from app.routers.sessions import router as sessions_router
 
-
+from app.database import Base, engine
+from app import models
 
 # Create the FastAPI application.
 app = FastAPI(
@@ -16,6 +17,9 @@ app = FastAPI(
     description="Backend API for our Formula 1 data engineering project.",
     version="0.1.0",
 )
+
+# Create database tables if they do not exist.
+Base.metadata.create_all(bind=engine)
 
 
 # Register the sessions endpoints with the main application.
