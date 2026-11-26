@@ -6,6 +6,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import get_db
 
+from app.routers.sessions import router as sessions_router
+
+
 
 # Create the FastAPI application.
 app = FastAPI(
@@ -13,6 +16,10 @@ app = FastAPI(
     description="Backend API for our Formula 1 data engineering project.",
     version="0.1.0",
 )
+
+
+# Register the sessions endpoints with the main application.
+app.include_router(sessions_router)
 
 
 @app.get("/")

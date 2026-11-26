@@ -9,3 +9,6 @@ psycopg[binary]
 
 # Load application settings from environment variables
 pydantic-settings
+
+# HTTP client used to call the OpenF1 API
+httpx
