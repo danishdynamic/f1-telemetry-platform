@@ -1,54 +1,41 @@
 
 import httpx
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import SessionModel
 from app.services.session_ingestion import ingest_sessions
 
-
-router = APIRouter(
-    prefix="/api/v1/sessions",
-    tags=["Sessions"],
-)
+router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
 @router.post("/sync")
-async def sync_sessions(
-    year: int = Query(default=2025, ge=2023, le=2026),
-    db: Session = Depends(get_db),
-):
-    # This endpoint fetches data from OpenF1
-    # and saves it into PostgreSQL.
+async def sync_sessions(year: int = 2025, db: Session = Depends(get_db)):
     try:
-        result = await ingest_sessions(year, db)
-        return result
+        processed = await ingest_sessions(db, year)
 
-    except httpx.HTTPError as error:
+        return {
+            "year": year,
+            "records_processed": processed,
+            "status": "success",
+        }
+
+    except httpx.HTTPError as exc:
         db.rollback()
-
         raise HTTPException(
             status_code=502,
-            detail="OpenF1 request failed",
-        ) from error
+            detail=f"OpenF1 API request failed: {exc}",
+        )
 
-    except Exception as error:
+    except Exception as exc:
         db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail="Session ingestion failed",
-        ) from error
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("")
-def get_sessions(
-    year: int = Query(default=2025, ge=2023, le=2026),
-    db: Session = Depends(get_db),
-):
-    # This endpoint reads data from PostgreSQL.
+def get_sessions(year: int = 2025, db: Session = Depends(get_db)):
     sessions = (
         db.query(SessionModel)
         .filter(SessionModel.year == year)

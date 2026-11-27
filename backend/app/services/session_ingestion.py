@@ -9,59 +9,43 @@ from app.services.openf1 import fetch_sessions
 
 
 def parse_datetime(value: str) -> datetime:
-    # OpenF1 timestamps may end with Z, meaning UTC.
-    # Python's fromisoformat accepts +00:00.
+    # Convert API timestamps such as "...Z" into Python-compatible UTC.
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-async def ingest_sessions(year: int, db: Session) -> dict:
-    # Step 1: Fetch sessions from the external API.
-    sessions = await fetch_sessions(year)
+async def ingest_sessions(db: Session, year: int) -> int:
+    records = await fetch_sessions(year)
 
-    inserted_or_updated = 0
-
-    for item in sessions:
-        # Step 2: Prepare the API record for PostgreSQL.
-        record = {
-            "session_key": item["session_key"],
-            "meeting_key": item["meeting_key"],
-            "year": item["year"],
-            "session_name": item["session_name"],
-            "session_type": item["session_type"],
-            "date_start": parse_datetime(item["date_start"]),
-            "date_end": parse_datetime(item["date_end"]),
-            "circuit_key": item["circuit_key"],
-            "circuit_short_name": item["circuit_short_name"],
-            "country_name": item["country_name"],
-            "location": item["location"],
-            "is_cancelled": item["is_cancelled"],
-            "raw_data": item,
+    for record in records:
+        values = {
+            "session_key": record["session_key"],
+            "meeting_key": record["meeting_key"],
+            "year": record["year"],
+            "session_name": record["session_name"],
+            "session_type": record["session_type"],
+            "date_start": parse_datetime(record["date_start"]),
+            "date_end": parse_datetime(record["date_end"]),
+            "circuit_key": record["circuit_key"],
+            "circuit_short_name": record["circuit_short_name"],
+            "country_name": record["country_name"],
+            "location": record["location"],
+            "is_cancelled": record.get("is_cancelled", False),
+            "raw_data": record,
         }
 
-        # Step 3: Insert the record.
-        # If the session already exists, update it instead.
-        statement = insert(SessionModel).values(**record)
+        # Insert new sessions; update existing ones by session_key.
+        statement = insert(SessionModel).values(**values)
 
         statement = statement.on_conflict_do_update(
-            index_elements=["session_key"],
+            index_elements=[SessionModel.session_key],
             set_={
-                "session_name": statement.excluded.session_name,
-                "session_type": statement.excluded.session_type,
-                "date_start": statement.excluded.date_start,
-                "date_end": statement.excluded.date_end,
-                "is_cancelled": statement.excluded.is_cancelled,
-                "raw_data": statement.excluded.raw_data,
+                key: value
+                for key, value in values.items()
+                if key != "session_key"
             },
         )
 
         db.execute(statement)
-        inserted_or_updated += 1
 
-    # Step 4: Commit all changes to PostgreSQL.
     db.commit()
-
-    return {
-        "year": year,
-        "records_processed": inserted_or_updated,
-        "status": "success",
-    }
+    return len(records)

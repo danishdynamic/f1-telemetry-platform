@@ -7,7 +7,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.database import get_db
 
 from app.routers.sessions import router as sessions_router
+from app.routers.analytics import router as analytics_router
+from app.routers.drivers import router as drivers_router
 
+from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app import models
 
@@ -18,13 +21,21 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Create database tables if they do not exist.
 Base.metadata.create_all(bind=engine)
 
 
 # Register the sessions endpoints with the main application.
 app.include_router(sessions_router)
-
+app.include_router(analytics_router)
+app.include_router(drivers_router)
 
 @app.get("/")
 def root():
