@@ -5,6 +5,7 @@ services:
     volumes:
       - ./data/bronze:/data/bronze:ro
       - ./data/silver:/data/silver
-      - ./pipelines/spark:/opt/spark/jobs:ro
+      - ./data/gold:/data/gold
+      - ./pipelines/spark/jobs:/opt/spark/jobs:ro
     environment:
       PYSPARK_PYTHON: python3
