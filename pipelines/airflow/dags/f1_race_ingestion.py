@@ -1,5 +1,7 @@
+import json
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pendulum
 import requests
@@ -23,7 +25,7 @@ def _extract_list(payload, key: str) -> list:
 
 @dag(
     dag_id="f1_race_ingestion",
-    description="Sync F1 sessions, ingest drivers and laps, and validate data",
+    description="Sync F1 sessions, save bronze snapshots, ingest drivers and laps, and validate data",
     schedule=None,  # Run manually for now
     start_date=pendulum.datetime(2025, 1, 1, tz="UTC"),
     catchup=False,
@@ -32,7 +34,7 @@ def _extract_list(payload, key: str) -> list:
         "retries": 2,
         "retry_delay": timedelta(minutes=2),
     },
-    tags=["f1", "ingestion"],
+    tags=["f1", "ingestion", "bronze"],
 )
 def f1_race_ingestion():
 
@@ -82,6 +84,45 @@ def f1_race_ingestion():
         )
 
         return session_key
+
+    @task
+    def save_bronze_snapshot(session_key: int):
+        # Store raw API responses without modifying the records.
+        bronze_dir = (
+            Path("/opt/airflow/data/bronze")
+            / f"year={YEAR}"
+            / f"session_key={session_key}"
+        )
+        bronze_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+        endpoints = {
+            "drivers": "drivers",
+            "laps": "laps",
+        }
+
+        for filename, endpoint in endpoints.items():
+            response = requests.get(
+                f"https://api.openf1.org/v1/{endpoint}",
+                params={"session_key": session_key},
+                timeout=120,
+            )
+            response.raise_for_status()
+
+            records = response.json()
+            output_file = bronze_dir / f"{filename}_{timestamp}.json"
+
+            with output_file.open("w", encoding="utf-8") as file:
+                json.dump(records, file, indent=2)
+
+            logging.info(
+                "Saved %s raw records to %s",
+                len(records),
+                output_file,
+            )
+
+        return str(bronze_dir)
 
     @task
     def ingest_drivers_and_laps(session_key: int):
@@ -139,10 +180,13 @@ def f1_race_ingestion():
 
     sessions_synced >> race_session_key
 
+    bronze_snapshot = save_bronze_snapshot(race_session_key)
+
     ingestion_result = ingest_drivers_and_laps(race_session_key)
     quality_result = validate_ingested_data(race_session_key)
 
-    # Quality checks only run after ingestion completes.
+    race_session_key >> bronze_snapshot
+    bronze_snapshot >> ingestion_result
     ingestion_result >> quality_result
 
 

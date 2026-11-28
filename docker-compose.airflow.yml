@@ -16,6 +16,7 @@ x-airflow-common: &airflow-common
     - ./pipelines/airflow/dags:/opt/airflow/dags
     - ./pipelines/airflow/logs:/opt/airflow/logs
     - ./pipelines/airflow/plugins:/opt/airflow/plugins
+    - ./data/bronze:/opt/airflow/data/bronze
 
   user: "50000:0"
 

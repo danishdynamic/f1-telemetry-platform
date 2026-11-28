@@ -1,0 +1,10 @@
+
+services:
+  spark:
+    build: ./docker/spark
+    volumes:
+      - ./data/bronze:/data/bronze:ro
+      - ./data/silver:/data/silver
+      - ./pipelines/spark:/opt/spark/jobs:ro
+    environment:
+      PYSPARK_PYTHON: python3
